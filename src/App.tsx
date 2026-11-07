@@ -1,126 +1,383 @@
-
-import React, { useEffect, useState } from 'react';
-import {
-  LayoutDashboard, FileText, Package, Users, ShoppingCart, BarChart3, Plus, Search,
-  Printer, Download, Trash2, Eye, AlertTriangle, Landmark, Settings, Wallet,
-  RotateCcw, X, Menu, Save, Upload, TrendingUp, Boxes, ArrowDownRight, ArrowUpRight
+import React, { useState } from 'react';
+import { 
+  LayoutDashboard, 
+  Receipt, 
+  FileText, 
+  TrendingUp, 
+  Plus, 
+  Search,
+  Users,
+  CreditCard,
+  ArrowUpRight,
+  Sparkles
 } from 'lucide-react';
 
-type PartyType = 'Customer' | 'Supplier' | 'Both';
-type Party = { id:string; name:string; type:PartyType; gstin:string; phone:string; email:string; city:string; state:string; receivable:number; payable:number };
-type Item = { id:string; name:string; hsn:string; category:string; type:'Product'|'Service'; purchasePrice:number; sellingPrice:number; mrp:number; minStock:number; currentStock:number; unit:string; gstRate:number };
-type Line = { itemId:string; name:string; hsn:string; qty:number; rate:number; gstRate:number; taxable:number; tax:number; total:number };
-type Invoice = { id:string; number:string; kind:'Sale'|'Purchase'|'Sales Return'|'Purchase Return'; date:string; dueDate:string; partyId:string; partyName:string; partyGstin:string; place:string; lines:Line[]; subtotal:number; tax:number; discount:number; total:number; paid:number; due:number; paymentMode:string; status:string; notes:string };
-type Expense = { id:string; date:string; category:string; description:string; amount:number; paymentMode:string };
-type Bank = { id:string; name:string; account:string; ifsc:string; opening:number; balance:number; isDefault:boolean };
-type State = { parties:Party[]; items:Item[]; invoices:Invoice[]; expenses:Expense[]; banks:Bank[]; cash:number; company:{name:string;gstin:string;phone:string;email:string;address:string;state:string}; settings:{currency:string;businessType:string;invoicePrefix:string} };
+interface InvoiceItem {
+  id: string;
+  name: string;
+  hsn: string;
+  qty: number;
+  rate: number;
+  gstPercent: number;
+}
 
-const seed:State = {
-  company:{name:'Vyapar Pro Demo',gstin:'29ABCDE1234F1Z5',phone:'9633656588',email:'accounts@example.com',address:'Bengaluru, Karnataka',state:'Karnataka'},
-  settings:{currency:'₹',businessType:'Wholesale & Retail',invoicePrefix:'INV'},
-  parties:[
-    {id:'P-1',name:'George Aykara',type:'Customer',gstin:'29AACCM9981K1Z8',phone:'9845011223',email:'george@example.com',city:'Mysuru',state:'Karnataka',receivable:100,payable:0},
-    {id:'P-2',name:'ABC Distributors',type:'Supplier',gstin:'29AAACS1428L1Z2',phone:'9876543210',email:'abc@example.com',city:'Bengaluru',state:'Karnataka',receivable:0,payable:2500},
-    {id:'P-3',name:'Retail Customer',type:'Both',gstin:'',phone:'9000000000',email:'',city:'Bengaluru',state:'Karnataka',receivable:0,payable:0}
-  ],
-  items:[
-    {id:'I-1',name:'Butter',hsn:'04051000',category:'Dairy',type:'Product',purchasePrice:300,sellingPrice:450,mrp:500,minStock:10,currentStock:24,unit:'KG',gstRate:12},
-    {id:'I-2',name:'USB Keyboard',hsn:'84716060',category:'Electronics',type:'Product',purchasePrice:650,sellingPrice:950,mrp:1100,minStock:8,currentStock:5,unit:'PCS',gstRate:18},
-    {id:'I-3',name:'Installation Service',hsn:'9987',category:'Service',type:'Service',purchasePrice:0,sellingPrice:500,mrp:500,minStock:0,currentStock:0,unit:'JOB',gstRate:18}
-  ], invoices:[], expenses:[],
-  banks:[{id:'B-1',name:'HDFC Bank',account:'XXXXXX5432',ifsc:'HDFC0001234',opening:184500,balance:184500,isDefault:true}], cash:45200
-};
-const money=(n:number,c='₹')=>`${c} ${Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
-const uid=(p:string)=>`${p}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-const readState=():State=>{try{const raw=localStorage.getItem('vyapar-pro-prototype-v1');return raw?{...seed,...JSON.parse(raw)}:seed}catch{return seed}};
+interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerGSTIN: string;
+  date: string;
+  items: InvoiceItem[];
+  type: 'B2B' | 'B2C';
+}
 
-export default function App(){
-  const [data,setData]=useState<State>(readState);
-  const [tab,setTab]=useState('dashboard');
-  const [query,setQuery]=useState('');
-  const [modal,setModal]=useState('');
-  const [editing,setEditing]=useState<any>(null);
-  const [notice,setNotice]=useState('');
-  const [mobileNav,setMobileNav]=useState(false);
-  useEffect(()=>{localStorage.setItem('vyapar-pro-prototype-v1',JSON.stringify(data))},[data]);
-  useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),2800);return()=>clearTimeout(t)},[notice]);
-  const currency=data.settings.currency;
-  const sales=data.invoices.filter(x=>x.kind==='Sale').reduce((s,x)=>s+x.total,0);
-  const purchases=data.invoices.filter(x=>x.kind==='Purchase').reduce((s,x)=>s+x.total,0);
-  const receivables=data.parties.reduce((s,p)=>s+p.receivable,0), payables=data.parties.reduce((s,p)=>s+p.payable,0);
-  const bankTotal=data.banks.reduce((s,b)=>s+b.balance,0), lowStock=data.items.filter(i=>i.type==='Product'&&i.currentStock<=i.minStock);
-  const filtered=(arr:any[],keys:string[])=>arr.filter(x=>keys.some(k=>String(x[k]??'').toLowerCase().includes(query.toLowerCase())));
-  const addParty=(p:Party)=>setData(d=>({...d,parties:[p,...d.parties]}));
-  const addItem=(i:Item)=>setData(d=>({...d,items:[i,...d.items]}));
-  const postInvoice=(inv:Invoice)=>{
-    const requested=new Map<string,number>();inv.lines.forEach(l=>requested.set(l.itemId,(requested.get(l.itemId)||0)+l.qty));
-    for(const [id,qty] of requested){const item=data.items.find(i=>i.id===id);if(!item){setNotice('An item in this transaction no longer exists.');return}if(inv.kind==='Sale'&&item.type==='Product'&&qty>item.currentStock){setNotice(`Insufficient stock: ${item.name} has ${item.currentStock} ${item.unit}.`);return}}
-    setData(d=>{
-      const items=d.items.map(i=>{const q=requested.get(i.id)||0;if(i.type!=='Product')return i;if(inv.kind==='Sale')return {...i,currentStock:i.currentStock-q};if(inv.kind==='Purchase')return {...i,currentStock:i.currentStock+q};if(inv.kind==='Sales Return')return {...i,currentStock:i.currentStock+q};if(inv.kind==='Purchase Return')return {...i,currentStock:Math.max(0,i.currentStock-q)};return i});
-      const parties=d.parties.map(p=>{if(p.id!==inv.partyId)return p;let r=p.receivable,py=p.payable;if(inv.kind==='Sale')r+=inv.due;if(inv.kind==='Purchase')py+=inv.due;if(inv.kind==='Sales Return')r=Math.max(0,r-inv.due);if(inv.kind==='Purchase Return')py=Math.max(0,py-inv.due);return {...p,receivable:r,payable:py}});
-      let cash=d.cash,banks=d.banks;
-      if(inv.paid>0&&inv.paymentMode!=='Credit'){if(inv.paymentMode==='Cash'){cash+=inv.kind==='Sale'||inv.kind==='Purchase Return'?inv.paid:-inv.paid}else banks=banks.map(b=>b.isDefault?{...b,balance:b.balance+((inv.kind==='Sale'||inv.kind==='Purchase Return')?inv.paid:-inv.paid)}:b)}
-      return {...d,items,parties,invoices:[inv,...d.invoices],cash,banks};
-    });setModal('');setEditing(inv);setModal('preview');setNotice(`${inv.kind} saved successfully.`)
+export default function App() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'invoices' | 'gstr1'>('dashboard');
+  
+  const [invoices, setInvoices] = useState<Invoice[]>([
+    {
+      id: '1',
+      invoiceNumber: 'INV-2026-001',
+      customerName: 'TechCorp Solutions Ltd',
+      customerGSTIN: '29ABCDE1234F1ZH',
+      date: '2026-11-05',
+      type: 'B2B',
+      items: [
+        { id: 'item-1', name: 'Wireless Router', hsn: '8517', qty: 5, rate: 2500, gstPercent: 18 },
+        { id: 'item-2', name: 'Cat6 Cable (Roll)', hsn: '8544', qty: 2, rate: 4500, gstPercent: 18 }
+      ]
+    },
+    {
+      id: '2',
+      invoiceNumber: 'INV-2026-002',
+      customerName: 'Ramesh Kumar',
+      customerGSTIN: 'URP',
+      date: '2026-11-06',
+      type: 'B2C',
+      items: [
+        { id: 'item-3', name: 'Mechanical Keyboard', hsn: '8471', qty: 1, rate: 3500, gstPercent: 18 }
+      ]
+    }
+  ]);
+
+  const [customerName, setCustomerName] = useState('');
+  const [customerGSTIN, setCustomerGSTIN] = useState('');
+  const [items, setItems] = useState<InvoiceItem[]>([
+    { id: '1', name: '', hsn: '', qty: 1, rate: 0, gstPercent: 18 }
+  ]);
+
+  const addItem = () => {
+    setItems([...items, { id: Date.now().toString(), name: '', hsn: '', qty: 1, rate: 0, gstPercent: 18 }]);
   };
-  const removeInvoice=(inv:Invoice)=>{if(!confirm('Delete this transaction? This prototype will not reverse its stock or ledger effects.'))return;setData(d=>({...d,invoices:d.invoices.filter(x=>x.id!==inv.id)}));setNotice('Transaction removed from list. For accounting safety, stock and ledger were not reversed.')};
-  const exportBackup=()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`vyapar-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href)};
-  const exportCsv=(rows:any[],name:string)=>{if(!rows.length){setNotice('Nothing to export.');return}const cols=Object.keys(rows[0]);const csv=[cols.join(','),...rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`${name}-${today()}.csv`;a.click();URL.revokeObjectURL(a.href)};
-  const importBackup=(file:File)=>{const r=new FileReader();r.onload=()=>{try{const v=JSON.parse(String(r.result));if(!v.parties||!v.items||!v.invoices)throw Error('Invalid backup');setData({...seed,...v});setNotice('Backup restored.')}catch{setNotice('Could not import: invalid backup file.')}};r.readAsText(file)};
-  const nav=[['dashboard','Dashboard',LayoutDashboard],['parties','Parties',Users],['inventory','Items & Inventory',Package],['invoices','Sales Invoices',FileText],['purchases','Purchase Invoices',ShoppingCart],['expenses','Expenses',Wallet],['cash_bank','Cash & Bank',Landmark],['returns','Returns',RotateCcw],['reports','Reports & GST',BarChart3],['settings','Settings',Settings]] as const;
-  return <div className="flex h-screen bg-slate-100 text-slate-800 overflow-hidden">
-    <style>{`
-      .field{display:block;width:100%;border:1px solid #cbd5e1;border-radius:7px;padding:9px 10px;font-size:12px;margin-top:5px;background:white;outline:none}.field:focus{border-color:#3b82f6;box-shadow:0 0 0 2px #dbeafe}.primary{display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:white;padding:9px 13px;border-radius:8px;font-size:12px;font-weight:700}.primary:hover{background:#1d4ed8}.secondary{display:inline-flex;align-items:center;gap:6px;background:white;border:1px solid #cbd5e1;color:#334155;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600}.cell{padding:11px 12px;border-bottom:1px solid #f1f5f9}.cell button{color:#64748b}.cell button:hover{color:#2563eb} @media print{body *{visibility:hidden!important}#print-invoice,#print-invoice *{visibility:visible!important}#print-invoice{position:absolute;left:0;top:0;width:100%;border:0!important;padding:20px!important}.fixed{position:static!important}}
-    `}</style>
-    <aside className={`${mobileNav?'fixed inset-y-0 left-0 z-40':'hidden'} md:flex w-64 bg-[#1e2238] text-slate-300 flex-col shrink-0 shadow-xl`}>
-      <div className="p-4 flex items-center gap-3 border-b border-slate-700 bg-[#16192b]"><div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xl">V</div><div><div className="font-extrabold text-white">Vyapar Pro</div><div className="text-[10px] text-slate-400">Accounting prototype</div></div><button className="md:hidden ml-auto" onClick={()=>setMobileNav(false)}><X size={18}/></button></div>
-      <nav className="p-3 space-y-1 overflow-y-auto">{nav.map(([id,label,Icon])=><button key={id} onClick={()=>{setTab(id);setQuery('');setMobileNav(false)}} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm ${tab===id?'bg-blue-600 text-white':'hover:bg-slate-800'}`}><span className="flex items-center gap-3"><Icon size={17}/>{label}</span>{id==='inventory'&&lowStock.length>0&&<span className="text-[10px] bg-amber-400 text-slate-900 rounded-full px-2">{lowStock.length}</span>}</button>)}</nav>
-      <div className="mt-auto p-4 border-t border-slate-700 text-[11px] text-slate-400">Demo data is stored in this browser.<br/>Not a GST filing or statutory accounting system.</div>
-    </aside>
-    <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-      <header className="h-14 bg-white border-b flex items-center justify-between px-4 md:px-6 shrink-0"><div className="flex items-center gap-3"><button className="md:hidden" onClick={()=>setMobileNav(true)}><Menu size={20}/></button><div className="relative"><Search size={15} className="absolute left-3 top-2.5 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search this section..." className="w-44 sm:w-72 pl-9 pr-3 py-2 bg-slate-50 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-200"/></div></div><div className="flex items-center gap-2"><button onClick={()=>{setEditing(null);setModal('transaction')}} className="bg-rose-600 text-white px-3 py-2 rounded-lg text-xs font-bold flex gap-1.5 items-center"><Plus size={15}/> New Transaction</button></div></header>
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        {tab==='dashboard'&&<><div className="flex flex-wrap justify-between items-end mb-5"><div><h1 className="text-xl font-extrabold">Business overview</h1><p className="text-xs text-slate-500 mt-1">Your accounting snapshot · {today()}</p></div><button onClick={()=>setModal('transaction')} className="text-xs bg-blue-600 text-white px-3 py-2 rounded-lg">+ Create transaction</button></div><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">{[["Sales",money(sales,currency),TrendingUp,'bg-emerald-50','text-emerald-600'],["Purchases",money(purchases,currency),ShoppingCart,'bg-blue-50','text-blue-600'],["Receivables",money(receivables,currency),ArrowDownRight,'bg-amber-50','text-amber-600'],["Payables",money(payables,currency),ArrowUpRight,'bg-rose-50','text-rose-600'],["Cash + Bank",money(data.cash+bankTotal,currency),Landmark,'bg-violet-50','text-violet-600'],["Expenses",money(data.expenses.reduce((s,e)=>s+e.amount,0),currency),Wallet,'bg-orange-50','text-orange-600'],["Inventory items",String(data.items.length),Boxes,'bg-cyan-50','text-cyan-600'],["Low stock alerts",String(lowStock.length),AlertTriangle,'bg-red-50','text-red-600']] .map(([title,value,Icon,bg,fg]:any)=><div key={title} className="bg-white border rounded-xl p-4 flex justify-between"><div><p className="text-[11px] font-bold text-slate-500 uppercase">{title}</p><p className="text-xl font-extrabold mt-2">{value}</p></div><div className={`${bg} ${fg} p-2 rounded-xl h-fit`}><Icon size={20}/></div></div>)}</div><div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-5"><Panel title="Recent transactions" action={<button onClick={()=>setTab('invoices')} className="text-blue-600 text-xs">View all</button>}>{data.invoices.length===0?<Empty text="No transactions yet. Create a sale or purchase to get started."/>:<div className="divide-y">{data.invoices.slice(0,6).map(i=><div key={i.id} className="py-3 flex justify-between text-xs"><div><b>{i.number}</b><div className="text-slate-500 mt-1">{i.partyName} · {i.kind} · {i.date}</div></div><div className="text-right"><b>{money(i.total,currency)}</b><div className="text-slate-500 mt-1">{i.status}</div></div></div>)}</div>}</Panel><Panel title="Stock alerts" action={<button onClick={()=>setTab('inventory')} className="text-blue-600 text-xs">Inventory</button>}>{lowStock.length===0?<Empty text="All products are above their minimum stock levels."/>:lowStock.map(i=><div key={i.id} className="flex justify-between py-2 border-b last:border-0 text-xs"><div><b>{i.name}</b><div className="text-slate-500">Minimum {i.minStock} {i.unit}</div></div><span className="text-rose-600 font-bold">{i.currentStock} {i.unit}</span></div>)}</Panel></div></>}
-        {tab==='parties'&&<Section title="Parties" subtitle="Manage customers and suppliers" action={<button className="primary" onClick={()=>{setEditing(null);setModal('party')}}><Plus size={14}/> Add party</button>}><div className="bg-white border rounded-xl overflow-hidden"><Table headers={['Name','Type','Phone','GSTIN','Receivable','Payable','']}><>{filtered(data.parties,['name','phone','gstin','city']).map(p=><tr key={p.id}><td className="cell font-semibold">{p.name}</td><td className="cell">{p.type}</td><td className="cell">{p.phone||'—'}</td><td className="cell">{p.gstin||'Unregistered'}</td><td className="cell text-emerald-700">{money(p.receivable,currency)}</td><td className="cell text-rose-700">{money(p.payable,currency)}</td><td className="cell"><button onClick={()=>{setEditing(p);setModal('party')}}><Eye size={15}/></button></td></tr>)}</></Table></div></Section>}
-        {tab==='inventory'&&<Section title="Items & Inventory" subtitle="Stock, prices, HSN and GST rates" action={<button className="primary" onClick={()=>{setEditing(null);setModal('item')}}><Plus size={14}/> Add item</button>}><div className="bg-white border rounded-xl overflow-hidden"><Table headers={['Item','HSN/SAC','Category','Purchase','Selling','Stock','GST','']}><>{filtered(data.items,['name','hsn','category']).map(i=><tr key={i.id}><td className="cell font-semibold">{i.name}<div className="text-[10px] text-slate-400">{i.id}</div></td><td className="cell">{i.hsn||'—'}</td><td className="cell">{i.category}</td><td className="cell">{money(i.purchasePrice,currency)}</td><td className="cell">{money(i.sellingPrice,currency)}</td><td className={`cell font-bold ${i.type==='Product'&&i.currentStock<=i.minStock?'text-rose-600':''}`}>{i.type==='Service'?'Service':`${i.currentStock} ${i.unit}`}</td><td className="cell">{i.gstRate}%</td><td className="cell"><button onClick={()=>{setEditing(i);setModal('item')}}><Eye size={15}/></button></td></tr>)}</></Table></div></Section>}
-        {(tab==='invoices'||tab==='purchases'||tab==='returns')&&<Section title={tab==='invoices'?'Sales Invoices':tab==='purchases'?'Purchase Invoices':'Sales & Purchase Returns'} subtitle="Create, review and print transactions" action={<button className="primary" onClick={()=>{setEditing(null);setModal('transaction')}}><Plus size={14}/> New transaction</button>}><div className="bg-white border rounded-xl overflow-hidden"><Table headers={['Number','Type','Party','Date','Total','Paid','Due','Status','Actions']}><>{filtered(data.invoices,['number','partyName','kind','status']).filter(i=>tab==='invoices'?i.kind==='Sale':tab==='purchases'?i.kind==='Purchase':i.kind.includes('Return')).map(i=><tr key={i.id}><td className="cell font-semibold">{i.number}</td><td className="cell">{i.kind}</td><td className="cell">{i.partyName}</td><td className="cell">{i.date}</td><td className="cell font-bold">{money(i.total,currency)}</td><td className="cell">{money(i.paid,currency)}</td><td className="cell">{money(i.due,currency)}</td><td className="cell"><Status value={i.status}/></td><td className="cell"><div className="flex gap-2"><button title="Preview" onClick={()=>{setEditing(i);setModal('preview')}}><Eye size={15}/></button><button title="Delete" onClick={()=>removeInvoice(i)}><Trash2 size={15}/></button></div></td></tr>)}</></Table>{data.invoices.filter(i=>tab==='invoices'?i.kind==='Sale':tab==='purchases'?i.kind==='Purchase':i.kind.includes('Return')).length===0&&<Empty text="No transactions in this section yet."/>}</div></Section>}
-        {tab==='expenses'&&<Section title="Expenses" subtitle="Track operating expenses" action={<button className="primary" onClick={()=>setModal('expense')}><Plus size={14}/> Add expense</button>}><div className="bg-white border rounded-xl overflow-hidden"><Table headers={['Date','Category','Description','Payment mode','Amount']}><>{filtered(data.expenses,['category','description','paymentMode']).map(e=><tr key={e.id}><td className="cell">{e.date}</td><td className="cell">{e.category}</td><td className="cell">{e.description}</td><td className="cell">{e.paymentMode}</td><td className="cell font-bold">{money(e.amount,currency)}</td></tr>)}</></Table>{data.expenses.length===0&&<Empty text="No expenses recorded."/>}</div></Section>}
-        {tab==='cash_bank'&&<Section title="Cash & Bank" subtitle="Balances and accounts" action={<button className="primary" onClick={()=>setModal('bank')}><Plus size={14}/> Add bank</button>}><div className="grid sm:grid-cols-2 gap-3 mb-4"><div className="bg-white border rounded-xl p-4"><div className="text-xs text-slate-500">Cash in hand</div><div className="text-2xl font-extrabold mt-2">{money(data.cash,currency)}</div><button className="text-xs text-blue-600 mt-3" onClick={()=>setModal('cash')}>Adjust cash balance</button></div><div className="bg-white border rounded-xl p-4"><div className="text-xs text-slate-500">Total bank balance</div><div className="text-2xl font-extrabold mt-2">{money(bankTotal,currency)}</div></div></div><div className="grid sm:grid-cols-2 gap-3">{data.banks.map(b=><div key={b.id} className="bg-white border rounded-xl p-4"><div className="flex justify-between"><b>{b.name}</b>{b.isDefault&&<Status value="Default"/>}</div><div className="text-xs text-slate-500 mt-1">A/C {b.account} · {b.ifsc}</div><div className="text-xl font-bold mt-4">{money(b.balance,currency)}</div></div>)}</div></Section>}
-        {tab==='reports'&&<Reports data={data} currency={currency} exportCsv={exportCsv}/>}
-        {tab==='settings'&&<Section title="Business Settings" subtitle="Company profile, preferences and backup"><div className="grid xl:grid-cols-2 gap-4"><Panel title="Company profile"><form className="space-y-3" onSubmit={e=>{e.preventDefault();setNotice('Company settings saved.')}}>{(['name','gstin','phone','email','address','state'] as const).map(k=><label key={k} className="block text-xs font-semibold capitalize">{k}<input className="field mt-1" value={data.company[k]} onChange={e=>setData(d=>({...d,company:{...d.company,[k]:e.target.value}}))}/></label>)}<button className="primary"><Save size={14}/> Save profile</button></form></Panel><Panel title="Preferences"><label className="block text-xs font-semibold">Currency<select className="field mt-1" value={data.settings.currency} onChange={e=>setData(d=>({...d,settings:{...d.settings,currency:e.target.value}}))}><option>₹</option><option>Rs.</option><option>$</option></select></label><label className="block text-xs font-semibold mt-3">Business type<input className="field mt-1" value={data.settings.businessType} onChange={e=>setData(d=>({...d,settings:{...d.settings,businessType:e.target.value}}))}/></label><label className="block text-xs font-semibold mt-3">Invoice prefix<input className="field mt-1" value={data.settings.invoicePrefix} onChange={e=>setData(d=>({...d,settings:{...d.settings,invoicePrefix:e.target.value}}))}/></label><div className="border-t mt-5 pt-4 space-y-3"><b className="text-sm">Backup & restore</b><div className="flex flex-wrap gap-2"><button className="secondary" onClick={exportBackup}><Download size={14}/> Download backup</button><label className="secondary cursor-pointer"><Upload size={14}/> Restore backup<input type="file" accept="application/json" className="hidden" onChange={e=>e.target.files?.[0]&&importBackup(e.target.files[0])}/></label></div><button className="text-xs text-rose-600" onClick={()=>{if(confirm('Reset all prototype data to the original sample?')){setData(seed);setNotice('Demo data reset.')}}}>Reset demo data</button></div></Panel></div></Section>}
-      </div>
-    </main>
-    {notice&&<div className="fixed bottom-5 right-5 bg-slate-900 text-white text-xs px-4 py-3 rounded-lg shadow-xl z-[80]">{notice}</div>}
-    {modal==='transaction'&&<TransactionModal data={data} onClose={()=>setModal('')} onSave={postInvoice} currency={currency}/>}
-    {modal==='party'&&<PartyModal value={editing} onClose={()=>setModal('')} onSave={p=>{if(editing)setData(d=>({...d,parties:d.parties.map(x=>x.id===p.id?p:x)}));else addParty(p);setModal('');setNotice('Party saved.')}}/>}
-    {modal==='item'&&<ItemModal value={editing} onClose={()=>setModal('')} onSave={i=>{if(editing)setData(d=>({...d,items:d.items.map(x=>x.id===i.id?i:x)}));else addItem(i);setModal('');setNotice('Item saved.')}}/>}
-    {modal==='expense'&&<ExpenseModal onClose={()=>setModal('')} onSave={e=>{setData(d=>({...d,expenses:[e,...d.expenses],cash:e.paymentMode==='Cash'?d.cash-e.amount:d.cash,banks:e.paymentMode==='Bank'?d.banks.map(b=>b.isDefault?{...b,balance:b.balance-e.amount}:b):d.banks}));setModal('');setNotice('Expense saved.')}}/>}
-    {modal==='bank'&&<BankModal onClose={()=>setModal('')} onSave={b=>{setData(d=>({...d,banks:[...d.banks.map(x=>({...x,isDefault:b.isDefault?false:x.isDefault})),b]}));setModal('');setNotice('Bank account added.')}}/>}
-    {modal==='cash'&&<CashModal current={data.cash} onClose={()=>setModal('')} onSave={v=>{setData(d=>({...d,cash:v}));setModal('');setNotice('Cash balance adjusted.')}}/>}
-    {modal==='preview'&&editing&&<InvoicePreview invoice={editing} company={data.company} currency={currency} onClose={()=>setModal('')}/>}
-  </div>
-}
 
-function Panel({title,action,children}:{title:string;action?:React.ReactNode;children:React.ReactNode}){return <section className="bg-white border rounded-xl p-4"><div className="flex justify-between items-center mb-3"><h3 className="font-bold text-sm">{title}</h3>{action}</div>{children}</section>}
-function Section({title,subtitle,action,children}:{title:string;subtitle:string;action?:React.ReactNode;children:React.ReactNode}){return <><div className="flex flex-wrap justify-between items-end gap-3 mb-4"><div><h1 className="text-xl font-extrabold">{title}</h1><p className="text-xs text-slate-500 mt-1">{subtitle}</p></div>{action}</div>{children}</>}
-function Empty({text}:{text:string}){return <div className="p-8 text-center text-xs text-slate-500">{text}</div>}
-function Table({headers,children}:{headers:string[];children:React.ReactNode}){return <div className="overflow-x-auto"><table className="w-full text-left text-xs whitespace-nowrap"><thead className="bg-slate-50 text-slate-500"><tr>{headers.map(h=><th key={h} className="px-3 py-3 font-semibold">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{children}</tbody></table></div>}
-function Status({value}:{value:string}){return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${value==='Paid'||value==='Default'?'bg-emerald-50 text-emerald-700':value==='Partial'?'bg-amber-50 text-amber-700':'bg-rose-50 text-rose-700'}`}>{value}</span>}
-function Modal({title,onClose,children,wide=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean}){return <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-3"><div className={`bg-white rounded-xl w-full ${wide?'max-w-4xl':'max-w-xl'} max-h-[94vh] flex flex-col shadow-2xl`}><div className="px-5 py-4 border-b flex justify-between items-center"><h2 className="font-bold">{title}</h2><button onClick={onClose}><X size={18}/></button></div><div className="p-5 overflow-y-auto">{children}</div></div></div>}
-const field='field';
-function TransactionModal({data,onClose,onSave,currency}:{data:State;onClose:()=>void;onSave:(i:Invoice)=>void;currency:string}){
- const [kind,setKind]=useState<Invoice['kind']>('Sale');const [partyId,setPartyId]=useState(data.parties.find(p=>p.type!=='Supplier')?.id||'');const [date,setDate]=useState(today());const [dueDate,setDueDate]=useState('');const [paymentMode,setPaymentMode]=useState('Cash');const [discount,setDiscount]=useState(0);const [paid,setPaid]=useState(0);const [notes,setNotes]=useState('');const [rows,setRows]=useState([{itemId:data.items[0]?.id||'',qty:1,rate:data.items[0]?.sellingPrice||0}]);
- const partyOptions=data.parties.filter(p=>kind==='Sale'||kind==='Sales Return'?p.type!=='Supplier':p.type!=='Customer');
- const lines:Line[]=rows.map(r=>{const i=data.items.find(x=>x.id===r.itemId);const taxable=r.qty*r.rate;const tax=taxable*(i?.gstRate||0)/100;return {itemId:r.itemId,name:i?.name||'Unknown item',hsn:i?.hsn||'',qty:r.qty,rate:r.rate,gstRate:i?.gstRate||0,taxable,tax,total:taxable+tax}});
- const subtotal=lines.reduce((s,l)=>s+l.taxable,0),tax=lines.reduce((s,l)=>s+l.tax,0),total=Math.max(0,subtotal+tax-discount),due=Math.max(0,total-paid);
- const submit=(e:React.FormEvent)=>{e.preventDefault();const p=data.parties.find(x=>x.id===partyId);if(!p||!rows.length||rows.some(r=>!r.itemId||r.qty<=0||r.rate<0)){alert('Select a party and valid item quantities/rates.');return}if(discount<0||discount>subtotal+tax||paid<0||paid>total){alert('Check discount and paid amount.');return}const qty=new Map<string,number>();rows.forEach(r=>qty.set(r.itemId,(qty.get(r.itemId)||0)+r.qty));if(kind==='Sale')for(const [id,q] of qty){const it=data.items.find(x=>x.id===id);if(it?.type==='Product'&&q>it.currentStock){alert(`Insufficient stock for ${it.name}. Available: ${it.currentStock}`);return}}const num=`${data.settings.invoicePrefix}-${String(data.invoices.length+1).padStart(4,'0')}`;onSave({id:uid('TX'),number:num,kind,date,dueDate,partyId,partyName:p.name,partyGstin:p.gstin,place:p.state,lines,subtotal,tax,discount,total,paid,due,paymentMode,status:due===0?'Paid':paid>0?'Partial':'Unpaid',notes})};
- return <Modal title="New transaction" onClose={onClose} wide><form onSubmit={submit} className="space-y-4"><div className="grid sm:grid-cols-3 gap-3"><label className="text-xs font-semibold">Transaction type<select className={field} value={kind} onChange={e=>setKind(e.target.value as any)}>{['Sale','Purchase','Sales Return','Purchase Return'].map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs font-semibold">Party<select className={field} value={partyId} onChange={e=>setPartyId(e.target.value)}>{partyOptions.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="text-xs font-semibold">Date<input type="date" className={field} value={date} onChange={e=>setDate(e.target.value)}/></label><label className="text-xs font-semibold">Due date<input type="date" className={field} value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label></div><div className="border rounded-lg overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr>{['Item','Qty','Rate','GST','Amount',''].map(x=><th key={x} className="p-2 text-left">{x}</th>)}</tr></thead><tbody>{rows.map((r,idx)=>{const it=data.items.find(i=>i.id===r.itemId);const l=lines[idx];return <tr key={idx} className="border-t"><td className="p-2 min-w-40"><select className="border rounded p-2 w-full" value={r.itemId} onChange={e=>setRows(old=>old.map((x,j)=>j===idx?{...x,itemId:e.target.value,rate:data.items.find(i=>i.id===e.target.value)?.[kind==='Sale'||kind==='Sales Return'?'sellingPrice':'purchasePrice']||0}:x))}>{data.items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select><div className="text-[10px] text-slate-400">{it?.type==='Product'?`Stock ${it.currentStock} ${it.unit}`:'Service'}</div></td><td className="p-2"><input type="number" min="0.001" step="0.001" className="border rounded p-2 w-20" value={r.qty} onChange={e=>setRows(old=>old.map((x,j)=>j===idx?{...x,qty:Number(e.target.value)}:x))}/></td><td className="p-2"><input type="number" min="0" step="0.01" className="border rounded p-2 w-24" value={r.rate} onChange={e=>setRows(old=>old.map((x,j)=>j===idx?{...x,rate:Number(e.target.value)}:x))}/></td><td className="p-2">{l.gstRate}%</td><td className="p-2 font-bold">{money(l.total,currency)}</td><td className="p-2"><button type="button" onClick={()=>setRows(old=>old.filter((_,j)=>j!==idx))}><Trash2 size={14}/></button></td></tr>})}</tbody></table></div><button type="button" className="text-xs text-blue-600 font-bold" onClick={()=>data.items.length&&setRows(r=>[...r,{itemId:data.items[0].id,qty:1,rate:data.items[0].sellingPrice}])}>+ Add line item</button><div className="grid sm:grid-cols-2 gap-4 border-t pt-4"><div className="space-y-3"><label className="text-xs font-semibold">Discount<input type="number" min="0" className={field} value={discount} onChange={e=>setDiscount(Number(e.target.value))}/></label><label className="text-xs font-semibold">Amount received/paid<input type="number" min="0" className={field} value={paid} onChange={e=>setPaid(Number(e.target.value))}/></label><label className="text-xs font-semibold">Payment mode<select className={field} value={paymentMode} onChange={e=>setPaymentMode(e.target.value)}>{['Cash','Bank','UPI','Card','Credit'].map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs font-semibold">Notes<textarea className={field} value={notes} onChange={e=>setNotes(e.target.value)}/></label></div><div className="bg-slate-50 rounded-lg p-4 text-sm space-y-2 h-fit"><div className="flex justify-between"><span>Subtotal</span><b>{money(subtotal,currency)}</b></div><div className="flex justify-between"><span>GST</span><b>{money(tax,currency)}</b></div><div className="flex justify-between"><span>Discount</span><b>{money(discount,currency)}</b></div><div className="border-t pt-2 flex justify-between text-lg"><b>Total</b><b>{money(total,currency)}</b></div><div className="flex justify-between"><span>Paid</span><b>{money(paid,currency)}</b></div><div className="flex justify-between text-rose-600"><span>Balance due</span><b>{money(due,currency)}</b></div></div></div><div className="flex justify-end gap-2"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" type="submit"><Save size={14}/> Save transaction</button></div></form></Modal>
+  const updateItem = (id: string, field: keyof InvoiceItem, value: any) => {
+    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const calculateTotals = (itemList: InvoiceItem[]) => {
+    let subtotal = 0;
+    let totalGst = 0;
+    itemList.forEach(item => {
+      const itemTotal = item.qty * item.rate;
+      const gst = (itemTotal * item.gstPercent) / 100;
+      subtotal += itemTotal;
+      totalGst += gst;
+    });
+    return { subtotal, totalGst, grandTotal: subtotal + totalGst };
+  };
+
+  const handleCreateInvoice = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newInv: Invoice = {
+      id: Date.now().toString(),
+      invoiceNumber: `INV-2026-00${invoices.length + 1}`,
+      customerName,
+      customerGSTIN: customerGSTIN || 'URP',
+      date: new Date().toISOString().split('T')[0],
+      type: customerGSTIN ? 'B2B' : 'B2C',
+      items
+    };
+    setInvoices([newInv, ...invoices]);
+    setCustomerName('');
+    setCustomerGSTIN('');
+    setItems([{ id: '1', name: '', hsn: '', qty: 1, rate: 0, gstPercent: 18 }]);
+    setActiveTab('invoices');
+  };
+
+  const stats = {
+    totalSales: invoices.reduce((acc, inv) => acc + calculateTotals(inv.items).grandTotal, 0),
+    totalGst: invoices.reduce((acc, inv) => acc + calculateTotals(inv.items).totalGst, 0),
+    count: invoices.length
+  };
+
+  return (
+    <div className="flex h-screen bg-[#0b0c10] text-gray-100 overflow-hidden font-sans">
+      {/* macOS Side Bar */}
+      <aside className="w-64 glass-panel border-r border-white/10 flex flex-col justify-between p-4 z-20">
+        <div>
+          {/* Mac Traffic Lights & App Brand */}
+          <div className="flex items-center space-x-2 px-3 pt-2 pb-6">
+            <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+            <span className="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+            <span className="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+          </div>
+
+          <div className="px-3 pb-6 flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl apple-button flex items-center justify-center">
+              <Receipt className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-base font-semibold tracking-tight text-white leading-none">Vyapar Pro</h1>
+              <p className="text-xs text-gray-400 mt-1 font-medium">Accounting</p>
+            </div>
+          </div>
+
+          {/* Navigation links */}
+          <nav className="space-y-1">
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 ${activeTab === 'dashboard' ? 'bg-white/10 text-white shadow-sm backdrop-blur-md' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Overview</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('invoices')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 ${activeTab === 'invoices' ? 'bg-white/10 text-white shadow-sm backdrop-blur-md' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Invoices</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('gstr1')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 ${activeTab === 'gstr1' ? 'bg-white/10 text-white shadow-sm backdrop-blur-md' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span>GSTR-1 Statutory</span>
+            </button>
+          </nav>
+        </div>
+
+        <div className="px-3 py-3 glass-card rounded-2xl flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 text-xs font-bold">
+            GA
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-xs font-semibold text-white truncate">George Aykara</p>
+            <p className="text-[10px] text-gray-400 truncate">Pro License</p>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main View Area */}
+      <main className="flex-1 overflow-y-auto bg-gradient-to-br from-[#0b0c10] via-[#12141c] to-[#0b0c10] p-10">
+        
+        {/* Top Header Bar */}
+        <header className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white capitalize">{activeTab}</h2>
+            <p className="text-xs text-gray-400 mt-1">Real-time business insights and billing</p>
+          </div>
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+            <input 
+              type="text" 
+              placeholder="Search..." 
+              className="apple-input text-xs rounded-full pl-9 pr-4 py-2 text-white placeholder-gray-500 w-64"
+            />
+          </div>
+        </header>
+
+        {activeTab === 'dashboard' && (
+          <div className="space-y-8">
+            {/* KPI Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="glass-card p-6 rounded-3xl transition-all duration-200">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Revenue</span>
+                  <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-baseline justify-between">
+                  <span className="text-3xl font-bold text-white tracking-tight">₹{stats.totalSales.toLocaleString()}</span>
+                  <span className="text-xs text-emerald-400 font-medium flex items-center">
+                    +12.4% <ArrowUpRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              <div className="glass-card p-6 rounded-3xl transition-all duration-200">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">GST Collected</span>
+                  <div className="p-2 bg-purple-500/10 rounded-xl text-purple-400">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-baseline justify-between">
+                  <span className="text-3xl font-bold text-white tracking-tight">₹{stats.totalGst.toLocaleString()}</span>
+                  <span className="text-xs text-gray-400 font-medium">Monthly tax liability</span>
+                </div>
+              </div>
+
+              <div className="glass-card p-6 rounded-3xl transition-all duration-200">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Invoices</span>
+                  <div className="p-2 bg-blue-500/10 rounded-xl text-blue-400">
+                    <Users className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-baseline justify-between">
+                  <span className="text-3xl font-bold text-white tracking-tight">{stats.count}</span>
+                  <span className="text-xs text-emerald-400 font-medium">Active</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Invoice Builder Panel */}
+            <div className="glass-panel p-8 rounded-3xl space-y-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-indigo-500/20 rounded-2xl text-indigo-400">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Create Tax Invoice</h3>
+                  <p className="text-xs text-gray-400">Generate instantly styled invoice receipts</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateInvoice} className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <input 
+                    type="text" 
+                    placeholder="Customer Name" 
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    required
+                    className="apple-input p-3.5 rounded-2xl text-xs text-white"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Customer GSTIN (Optional)" 
+                    value={customerGSTIN}
+                    onChange={(e) => setCustomerGSTIN(e.target.value)}
+                    className="apple-input p-3.5 rounded-2xl text-xs text-white"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  {items.map((item) => (
+                    <div key={item.id} className="grid grid-cols-5 gap-3 items-center">
+                      <input 
+                        type="text" 
+                        placeholder="Item Description" 
+                        value={item.name}
+                        onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                        required
+                        className="apple-input p-3 rounded-xl text-xs text-white col-span-2"
+                      />
+                      <input 
+                        type="number" 
+                        placeholder="Qty" 
+                        value={item.qty}
+                        onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))}
+                        className="apple-input p-3 rounded-xl text-xs text-white"
+                      />
+                      <input 
+                        type="number" 
+                        placeholder="Rate (₹)" 
+                        value={item.rate}
+                        onChange={(e) => updateItem(item.id, 'rate', Number(e.target.value))}
+                        className="apple-input p-3 rounded-xl text-xs text-white"
+                      />
+                      <select 
+                        value={item.gstPercent}
+                        onChange={(e) => updateItem(item.id, 'gstPercent', Number(e.target.value))}
+                        className="apple-input p-3 rounded-xl text-xs text-white bg-[#191b23]"
+                      >
+                        <option value={5}>5% GST</option>
+                        <option value={12}>12% GST</option>
+                        <option value={18}>18% GST</option>
+                        <option value={28}>28% GST</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                  <button 
+                    type="button" 
+                    onClick={addItem} 
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center space-x-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Item</span>
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="apple-button text-white font-medium px-6 py-2.5 rounded-full text-xs"
+                  >
+                    Generate Invoice
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
+          <div className="glass-panel rounded-3xl overflow-hidden border border-white/10">
+            <table className="w-full text-left text-xs text-gray-300">
+              <thead className="bg-white/5 text-gray-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="p-4">Invoice</th>
+                  <th className="p-4">Customer</th>
+                  <th className="p-4">Type</th>
+                  <th className="p-4">Date</th>
+                  <th className="p-4 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {invoices.map((inv) => {
+                  const totals = calculateTotals(inv.items);
+                  return (
+                    <tr key={inv.id} className="hover:bg-white/5 transition-colors">
+                      <td className="p-4 font-mono font-medium text-indigo-400">{inv.invoiceNumber}</td>
+                      <td className="p-4 font-medium text-white">{inv.customerName}</td>
+                      <td className="p-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${inv.type === 'B2B' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'}`}>
+                          {inv.type}
+                        </span>
+                      </td>
+                      <td className="p-4 text-gray-400">{inv.date}</td>
+                      <td className="p-4 text-right font-bold text-white">₹{totals.grandTotal.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'gstr1' && (
+          <div className="grid grid-cols-2 gap-6">
+            <div className="glass-panel p-8 rounded-3xl space-y-3">
+              <h3 className="text-base font-semibold text-white">B2B Supplies</h3>
+              <p className="text-xs text-gray-400">Registered business supplies</p>
+              <div className="pt-2 text-3xl font-bold text-indigo-400 tracking-tight">
+                ₹{invoices.filter(i => i.type === 'B2B').reduce((acc, i) => acc + calculateTotals(i.items).grandTotal, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="glass-panel p-8 rounded-3xl space-y-3">
+              <h3 className="text-base font-semibold text-white">B2C Supplies</h3>
+              <p className="text-xs text-gray-400">Consumer end-user sales</p>
+              <div className="pt-2 text-3xl font-bold text-emerald-400 tracking-tight">
+                ₹{invoices.filter(i => i.type === 'B2C').reduce((acc, i) => acc + calculateTotals(i.items).grandTotal, 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
-function PartyModal({value,onClose,onSave}:{value:Party|null;onClose:()=>void;onSave:(p:Party)=>void}){const [v,setV]=useState<Party>(value||{id:uid('P'),name:'',type:'Customer',gstin:'',phone:'',email:'',city:'',state:'Karnataka',receivable:0,payable:0});const upd=(k:keyof Party,x:any)=>setV(p=>({...p,[k]:x}));return <Modal title={value?'Edit party':'Add party'} onClose={onClose}><form onSubmit={e=>{e.preventDefault();onSave(v)}} className="grid sm:grid-cols-2 gap-3">{(['name','phone','email','gstin','city','state'] as const).map(k=><label key={k} className="text-xs font-semibold capitalize">{k}<input required={k==='name'} className={field} value={v[k]} onChange={e=>upd(k,e.target.value)}/></label>)}<label className="text-xs font-semibold">Type<select className={field} value={v.type} onChange={e=>upd('type',e.target.value)}>{['Customer','Supplier','Both'].map(x=><option key={x}>{x}</option>)}</select></label><div className="sm:col-span-2 flex justify-end gap-2"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary">Save party</button></div></form></Modal>}
-function ItemModal({value,onClose,onSave}:{value:Item|null;onClose:()=>void;onSave:(i:Item)=>void}){const [v,setV]=useState<Item>(value||{id:uid('I'),name:'',hsn:'',category:'General',type:'Product',purchasePrice:0,sellingPrice:0,mrp:0,minStock:0,currentStock:0,unit:'PCS',gstRate:18});const upd=(k:keyof Item,x:any)=>setV(p=>({...p,[k]:x}));return <Modal title={value?'Edit item':'Add inventory item'} onClose={onClose}><form onSubmit={e=>{e.preventDefault();onSave(v)}} className="grid sm:grid-cols-2 gap-3">{(['name','hsn','category','unit'] as const).map(k=><label key={k} className="text-xs font-semibold capitalize">{k}<input required={k==='name'} className={field} value={v[k]} onChange={e=>upd(k,e.target.value)}/></label>)}<label className="text-xs font-semibold">Item type<select className={field} value={v.type} onChange={e=>upd('type',e.target.value)}><option>Product</option><option>Service</option></select></label>{(['purchasePrice','sellingPrice','mrp','minStock','currentStock','gstRate'] as const).map(k=><label key={k} className="text-xs font-semibold">{k.replace(/[A-Z]/g,m=>' '+m)}<input type="number" min="0" step="0.01" className={field} value={v[k]} onChange={e=>upd(k,Number(e.target.value))}/></label>)}<div className="sm:col-span-2 flex justify-end gap-2"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary">Save item</button></div></form></Modal>}
-function ExpenseModal({onClose,onSave}:{onClose:()=>void;onSave:(e:Expense)=>void}){const [v,setV]=useState<Expense>({id:uid('EXP'),date:today(),category:'General',description:'',amount:0,paymentMode:'Cash'});return <Modal title="Add expense" onClose={onClose}><form className="space-y-3" onSubmit={e=>{e.preventDefault();if(v.amount<=0){alert('Enter an amount greater than zero');return}onSave(v)}}><label className="text-xs font-semibold">Date<input type="date" className={field} value={v.date} onChange={e=>setV({...v,date:e.target.value})}/></label><label className="text-xs font-semibold">Category<select className={field} value={v.category} onChange={e=>setV({...v,category:e.target.value})}>{['General','Rent','Salary','Travel','Utilities','Marketing','Repairs','Other'].map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs font-semibold">Description<input required className={field} value={v.description} onChange={e=>setV({...v,description:e.target.value})}/></label><label className="text-xs font-semibold">Amount<input type="number" min="0.01" step="0.01" className={field} value={v.amount} onChange={e=>setV({...v,amount:Number(e.target.value)})}/></label><label className="text-xs font-semibold">Paid from<select className={field} value={v.paymentMode} onChange={e=>setV({...v,paymentMode:e.target.value})}><option>Cash</option><option>Bank</option></select></label><div className="flex justify-end gap-2"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary">Save expense</button></div></form></Modal>}
-function BankModal({onClose,onSave}:{onClose:()=>void;onSave:(b:Bank)=>void}){const [v,setV]=useState<Bank>({id:uid('B'),name:'',account:'',ifsc:'',opening:0,balance:0,isDefault:false});return <Modal title="Add bank account" onClose={onClose}><form className="space-y-3" onSubmit={e=>{e.preventDefault();onSave(v)}}>{(['name','account','ifsc'] as const).map(k=><label key={k} className="text-xs font-semibold capitalize">{k}<input required={k!=='ifsc'} className={field} value={v[k]} onChange={e=>setV({...v,[k]:e.target.value})}/></label>)}<label className="text-xs font-semibold">Opening balance<input type="number" min="0" className={field} value={v.balance} onChange={e=>setV({...v,balance:Number(e.target.value),opening:Number(e.target.value)})}/></label><label className="flex gap-2 text-xs"><input type="checkbox" checked={v.isDefault} onChange={e=>setV({...v,isDefault:e.target.checked})}/> Set as default</label><div className="flex justify-end gap-2"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary">Save account</button></div></form></Modal>}
-function CashModal({current,onClose,onSave}:{current:number;onClose:()=>void;onSave:(v:number)=>void}){const [v,setV]=useState(current);return <Modal title="Adjust cash balance" onClose={onClose}><form onSubmit={e=>{e.preventDefault();onSave(v)}}><label className="text-xs font-semibold">New cash balance<input type="number" min="0" className={field} value={v} onChange={e=>setV(Number(e.target.value))}/></label><div className="flex justify-end gap-2 mt-4"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary">Save</button></div></form></Modal>}
-function InvoicePreview({invoice,company,currency,onClose}:{invoice:Invoice;company:State['company'];currency:string;onClose:()=>void}){return <Modal title="Transaction preview" onClose={onClose} wide><div id="print-invoice" className="border p-6 text-xs"><div className="flex justify-between"><div><h1 className="text-xl font-black">{company.name}</h1><p>{company.address}</p><p>GSTIN: {company.gstin}</p><p>{company.phone} · {company.email}</p></div><div className="text-right"><h2 className="text-lg font-bold">{invoice.kind.toUpperCase()}</h2><p>{invoice.number}</p><p>Date: {invoice.date}</p><p>Due: {invoice.dueDate||'—'}</p></div></div><hr className="my-4"/><p><b>Party:</b> {invoice.partyName}</p><p><b>GSTIN:</b> {invoice.partyGstin||'Unregistered'}</p><p><b>Place:</b> {invoice.place}</p><table className="w-full mt-4"><thead><tr className="border-b">{['Item','HSN','Qty','Rate','Taxable','GST','Total'].map(x=><th key={x} className="text-left py-2">{x}</th>)}</tr></thead><tbody>{invoice.lines.map((l,idx)=><tr key={idx} className="border-b"><td className="py-2">{l.name}</td><td>{l.hsn}</td><td>{l.qty}</td><td>{money(l.rate,currency)}</td><td>{money(l.taxable,currency)}</td><td>{l.gstRate}% ({money(l.tax,currency)})</td><td>{money(l.total,currency)}</td></tr>)}</tbody></table><div className="ml-auto max-w-xs mt-4 space-y-1"><p className="flex justify-between"><span>Subtotal</span><b>{money(invoice.subtotal,currency)}</b></p><p className="flex justify-between"><span>GST</span><b>{money(invoice.tax,currency)}</b></p><p className="flex justify-between"><span>Discount</span><b>{money(invoice.discount,currency)}</b></p><p className="flex justify-between text-base border-t pt-2"><b>Total</b><b>{money(invoice.total,currency)}</b></p><p className="flex justify-between"><span>Paid</span>{money(invoice.paid,currency)}</p><p className="flex justify-between"><span>Balance</span><b>{money(invoice.due,currency)}</b></p></div><p className="mt-8">Notes: {invoice.notes||'—'}</p><p className="mt-10 text-right">Authorized Signatory</p></div><div className="flex justify-end gap-2 mt-4"><button className="secondary" onClick={()=>window.print()}><Printer size={14}/> Print</button><button className="primary" onClick={onClose}>Close</button></div></Modal>}
-function Reports({data,currency,exportCsv}:{data:State;currency:string;exportCsv:(r:any[],n:string)=>void}){const sales=data.invoices.filter(i=>i.kind==='Sale'),purchases=data.invoices.filter(i=>i.kind==='Purchase');const output=sales.reduce((s,i)=>s+i.tax,0),input=purchases.reduce((s,i)=>s+i.tax,0);const rows=[{metric:'Sales taxable value',value:sales.reduce((s,i)=>s+i.subtotal,0)},{metric:'Output GST (sales)',value:output},{metric:'Purchase taxable value',value:purchases.reduce((s,i)=>s+i.subtotal,0)},{metric:'Input GST (purchases)',value:input},{metric:'Net GST estimate',value:output-input}];return <Section title="Reports & GST" subtitle="Prototype summaries based on recorded transactions" action={<button className="secondary" onClick={()=>exportCsv(rows,'gst-summary')}><Download size={14}/> Export summary</button>}><div className="grid sm:grid-cols-3 gap-3 mb-4">{[['Sales',sales.reduce((s,i)=>s+i.total,0)],['Purchases',purchases.reduce((s,i)=>s+i.total,0)],['Net GST estimate',output-input]].map(([k,v]:any)=><div key={k} className="bg-white border rounded-xl p-4"><div className="text-xs text-slate-500">{k}</div><div className="text-xl font-bold mt-2">{money(v,currency)}</div></div>)}</div><Panel title="GST summary (illustrative)"><Table headers={['Metric','Amount']}><>{rows.map(r=><tr key={r.metric}><td className="cell">{r.metric}</td><td className="cell font-bold">{money(r.value,currency)}</td></tr>)}</></Table><p className="text-[11px] text-amber-700 bg-amber-50 p-3 rounded-lg mt-3">This is an internal estimate only. It does not calculate all GST adjustments, reverse charge, exemptions, place-of-supply rules, credit notes, or statutory return fields. Do not file GSTR-1 or GSTR-3B using this report.</p></Panel><div className="mt-4"><Panel title="Export transaction register"><button className="secondary" onClick={()=>exportCsv(data.invoices.map(i=>({number:i.number,kind:i.kind,date:i.date,party:i.partyName,taxable:i.subtotal,gst:i.tax,total:i.total,paid:i.paid,due:i.due,status:i.status})),'transactions')}><Download size={14}/> Export all transactions CSV</button></Panel></div></Section>}

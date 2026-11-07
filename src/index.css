@@ -1,41 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  --text: #9ca3af;
-  --text-h: #f3f4f6;
-  --bg: #111827;
-  --card-bg: #1f2937;
-  --border: #374151;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --font-apple: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, sans-serif;
 }
 
 body {
   margin: 0;
-  padding: 0;
-  font-family: var(--sans);
-  background-color: var(--bg);
-  color: var(--text);
+  font-family: var(--font-apple);
+  background-color: #0b0c10;
+  color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  min-height: 100vh;
-  display: flex;
-  background-color: var(--bg);
-  color: var(--text);
+/* Glassmorphism utility classes */
+.glass-panel {
+  background: rgba(25, 27, 35, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.glass-card {
+  background: rgba(35, 38, 50, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
-::-webkit-scrollbar-track {
-  background: #111827;
+
+.glass-card:hover {
+  background: rgba(45, 48, 62, 0.55);
+  border-color: rgba(255, 255, 255, 0.12);
 }
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 4px;
+
+.apple-button {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.apple-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.5);
+}
+
+.apple-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.apple-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  outline: none;
 }
 
 @media print {
