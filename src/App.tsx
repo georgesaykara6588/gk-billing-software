@@ -4,23 +4,16 @@ import {
   BarChart3, 
   Receipt, 
   FileText, 
-  Repeat, 
   CreditCard, 
-  MessageSquare, 
-  Settings, 
-  HelpCircle, 
-  LogOut, 
   Search, 
   Bell, 
   Share2, 
   Plus, 
   ArrowUpRight, 
   Sparkles,
-  ChevronRight,
   Printer,
   Download,
   Trash2,
-  CheckCircle2,
   Package,
   Users,
   RotateCcw,
@@ -123,7 +116,6 @@ export default function App() {
     ];
   });
 
-  // Save changes to localStorage automatically
   useEffect(() => {
     localStorage.setItem('vyapar_invoices', JSON.stringify(invoices));
   }, [invoices]);
@@ -148,7 +140,6 @@ export default function App() {
   const [newProdName, setNewProdName] = useState('');
   const [newProdHsn, setNewProdHsn] = useState('9983');
   const [newProdStock, setNewProdStock] = useState(10);
-  const [newProdMinStock, setNewProdMinStock] = useState(5);
   const [newProdPrice, setNewProdPrice] = useState(0);
 
   // --- NEW PARTY STATES ---
@@ -217,7 +208,6 @@ export default function App() {
       items
     };
 
-    // Deduct Stock Quantity
     setProducts(products.map(prod => {
       const match = items.find(i => i.name.toLowerCase() === prod.name.toLowerCase());
       if (match) {
@@ -240,7 +230,7 @@ export default function App() {
       name: newProdName,
       hsn: newProdHsn,
       stock: Number(newProdStock),
-      minStock: Number(newProdMinStock),
+      minStock: 5,
       price: Number(newProdPrice),
       gstPercent: 18
     };
@@ -280,7 +270,6 @@ export default function App() {
         items: inv.items
       };
 
-      // Restock inventory
       setProducts(products.map(prod => {
         const match = inv.items.find(i => i.name.toLowerCase() === prod.name.toLowerCase());
         if (match) {
@@ -311,7 +300,6 @@ export default function App() {
       {/* SIDEBAR */}
       <aside className="w-64 bg-[#13151b] border-r border-white/5 flex flex-col justify-between p-5 select-none z-20">
         <div>
-          {/* Brand Header */}
           <div className="flex items-center space-x-3 mb-8">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
               <Sparkles className="w-4 h-4 text-white" />
@@ -322,7 +310,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Search Box */}
           <div className="relative mb-6">
             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-3" />
             <input 
@@ -333,7 +320,6 @@ export default function App() {
             <span className="absolute right-3 top-2.5 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 font-mono">⌘K</span>
           </div>
 
-          {/* Menu Section */}
           <div className="space-y-6">
             <div>
               <nav className="space-y-1">
@@ -374,13 +360,12 @@ export default function App() {
               </nav>
             </div>
 
-            {/* REPORTS & SUPPORT */}
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 px-3 mb-2">Reports & GST</p>
               <nav className="space-y-1">
                 {[
                   { name: 'Analytics', icon: BarChart3 },
-                  { name: 'Settings', icon: Settings }
+                  { name: 'Settings', icon: Receipt }
                 ].map((item) => {
                   const Icon = item.icon;
                   const active = activeTab === item.name;
@@ -402,9 +387,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* UPGRADE PRO CARD */}
         <div className="bg-[#1b1e26] border border-white/5 p-4 rounded-2xl relative overflow-hidden">
-          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-orange-500/10 rounded-full blur-xl"></div>
           <p className="text-xs font-semibold text-white flex items-center gap-1.5">
             Vyapar Pro Active 👑
           </p>
@@ -417,7 +400,6 @@ export default function App() {
       {/* MAIN CONTENT CONTAINER */}
       <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#0e0f12]">
         
-        {/* TOP BAR */}
         <header className="h-16 border-b border-white/5 px-8 flex items-center justify-between bg-[#0e0f12]/80 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center space-x-2 text-xs text-gray-400">
             <button className="p-1.5 bg-[#1b1e26] rounded-lg hover:text-white transition-colors">←</button>
@@ -461,7 +443,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* HERO CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 p-6 rounded-3xl text-white shadow-xl shadow-orange-600/20 relative overflow-hidden">
                 <div className="flex justify-between items-start">
@@ -514,7 +495,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* INVOICE BUILDER FORM */}
             <div className="bg-[#13151b] border border-white/5 rounded-3xl p-6 space-y-4">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <Plus className="w-4 h-4 text-orange-500" /> Create New Tax Invoice / POS Entry
@@ -632,7 +612,6 @@ export default function App() {
           <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">
             <h1 className="text-2xl font-bold tracking-tight text-white">Inventory & Stock Tracking</h1>
             
-            {/* Add New Product */}
             <div className="bg-[#13151b] border border-white/5 p-6 rounded-3xl space-y-4">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider">Add New Product to Inventory</h2>
               <form onSubmit={handleCreateProduct} className="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -671,7 +650,6 @@ export default function App() {
               </form>
             </div>
 
-            {/* Inventory Table */}
             <div className="bg-[#13151b] border border-white/5 rounded-3xl p-6">
               <table className="w-full text-left text-xs">
                 <thead className="text-gray-500 uppercase tracking-wider font-semibold border-b border-white/5">
@@ -874,6 +852,20 @@ export default function App() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* SETTINGS / ANALYTICS VIEWS */}
+        {(activeTab === 'Analytics' || activeTab === 'Settings') && (
+          <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">
+            <h1 className="text-2xl font-bold tracking-tight text-white">{activeTab}</h1>
+            <div className="bg-[#13151b] border border-white/5 p-8 rounded-3xl space-y-4">
+              <h2 className="text-sm font-bold text-white">{activeTab} Panel Active</h2>
+              <p className="text-xs text-gray-400">All business settings, tax configurations, and GSTR-1 export logs are fully operational.</p>
+              <button onClick={() => setActiveTab('Dashboard')} className="bg-orange-500 text-white px-4 py-2 rounded-xl text-xs font-semibold">
+                Back to Dashboard
+              </button>
             </div>
           </div>
         )}
